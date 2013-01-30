@@ -15,6 +15,9 @@
   "devDependencies": {
     "nodeunit": "~0.7.4"
   },
+  "engines": {
+    "node": ">=0.9.7"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:wanderview/node-pcap-socket.git"
