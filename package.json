@@ -1,0 +1,26 @@
+{
+  "name": "pcap-socket",
+  "description": "Socket compatibility layer on top of the pcap-parser module."
+  "keywords": [
+    "pcap",
+    "socket",
+    "mock"
+  ],
+  "version": "0.1.0",
+  "author": "Ben Kelly <ben@wanderview.com>",
+  "license": "BSD",
+  "dependencies": {
+    "pcap-parser": "~0.2.1"
+  },
+  "devDependencies": {
+    "nodeunit": "~0.7.4",
+  },
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:wanderview/node-pcap-socket.git"
+  },
+  "scripts": {
+    "test": "nodeunit test"
+  },
+  "main": "socket.js"
+}
