@@ -32,11 +32,11 @@ module.exports.testData = function(test) {
 
   var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
 
-  var psocket = new PcapSocket(file, '192.168.1.2.139');
+  var psocket = new PcapSocket(file, '192.168.1.2');
 
-  _flow(psocket, 379, function(chunk) {
+  _flow(psocket, 209, function(chunk) {
     test.ok(chunk);
-    test.equal(379, chunk.length);
+    test.equal(209, chunk.length);
   });
 
   psocket.on('end', function() {
@@ -49,7 +49,7 @@ module.exports.testResponse = function(test) {
 
   var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
 
-  var psocket = new PcapSocket(file, '192.168.1.2.139');
+  var psocket = new PcapSocket(file, '192.168.1.2');
 
   var msg = 'hello world';
 
@@ -58,7 +58,7 @@ module.exports.testResponse = function(test) {
     test.equal(msg, chunk.toString());
   });
 
-  _flow(psocket, 379, function(chunk) {
+  _flow(psocket, 209, function(chunk) {
     psocket.write(new Buffer(msg));
   });
 

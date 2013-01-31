@@ -30,9 +30,12 @@ var Duplex = stream.Duplex;
 var PassThrough = stream.PassThrough;
 var util = require('util');
 
+var ip = require('ip');
 var pcap = require('pcap-parser');
 
 util.inherits(PcapSocket, Duplex);
+
+// TODO: consider moving header parsing into separate modules
 
 function PcapSocket(pcapSource, address, opts) {
   var self = (this instanceof PcapSocket)
@@ -48,6 +51,7 @@ function PcapSocket(pcapSource, address, opts) {
 
   self._reading = true;
   self._address = address;
+  self._autoPause = !!opts.autoPause;
 
   self._parser = pcap.parse(pcapSource);
   self._parser.on('packet', self._onData.bind(self));
@@ -69,15 +73,148 @@ PcapSocket.prototype._write = function(chunk, callback) {
 };
 
 PcapSocket.prototype._onData = function(packet) {
-  // TODO: parse and strip headers
   var payload = packet.data;
 
-  // TODO: only push payload if its to the correct address
-  // TODO: auto-pause stream if reverse traffic is seen
+  var ether = this._parseEthernet(payload);
+  if (ether.type !== 0x0800) {
+    return;
+  }
 
-  var room = this.push(payload);
+  var iph = this._parseIP(ether.data);
+  // Only consider TCP packets without IP fragmentation
+  if (!iph || iph.protocol !== 0x06 || iph.mf || iph.offset) {
+    return;
+  }
+
+  var tcp = this._parseTCP(iph.data);
+  if (tcp.data.length < 1) {
+    return;
+  }
+
+  // auto-stop if we see packets coming from 
+  if (iph.src === this._address && this._autoPause) {
+    this._reading = false;
+    this._parser.stream.pause();
+    return;
+  }
+
+  if (iph.dst !== this._address) {
+    return;
+  }
+
+  var room = this.push(tcp.data);
   if (!room && this._reading) {
     this._reading = false;
     this._parser.stream.pause();
   }
 };
+
+PcapSocket.prototype._parseEthernet = function(buf) {
+  var offset = 0;
+
+  var dst = buf.slice(offset, offset + 6);
+  offset += 6;
+
+  var src = buf.slice(offset, offset + 6);
+  offset += 6;
+
+  var type = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var data = buf.slice(offset);
+
+  return { dst: dst, src: src, type: type, data: data };
+};
+
+PcapSocket.prototype._parseIP = function(buf) {
+  var offset = 0;
+
+  var tmp = buf.readUInt8(offset);
+  offset += 1;
+
+  var version = (tmp & 0xf0) >> 4;
+  if (version != 4) {
+    return null;
+  }
+
+  var headerLength = (tmp & 0x0f) * 4;
+
+  // skip DSCP and ECN fields
+  offset += 1;
+
+  var totalLength = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var id = buf.readUInt16BE(offset);
+  offset += 2;
+
+  tmp = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var flags = (tmp & 0xe000) >> 13;
+  var fragmentOffset = tmp & 0x1fff;
+
+  var df = !!(flags & 0x2);
+  var mf = !!(flags & 0x4);
+
+  var ttl = buf.readUInt8(offset);
+  offset += 1;
+
+  var protocol = buf.readUInt8(offset);
+  offset += 1;
+
+  var checksum = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var src = ip.toString(buf.slice(offset, offset + 4));
+  offset += 4;
+
+  var dst = ip.toString(buf.slice(offset, offset + 4));
+  offset += 4;
+
+  var data = buf.slice(headerLength);
+
+  return { flags: {df: df, mf: mf}, id: id, offset: fragmentOffset, ttl: ttl,
+           protocol: protocol, src: src, dst: dst, data: data };
+};
+
+PcapSocket.prototype._parseTCP = function(buf) {
+  var offset = 0;
+
+  var srcPort = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var dstPort = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var seq = buf.readUInt32BE(offset);
+  offset += 4;
+
+  var ack = buf.readUInt32BE(offset);
+  offset += 4;
+
+  var tmp = buf.readUInt8(offset);
+  offset += 1;
+
+  var headerLength = ((tmp & 0xf0) >> 4) * 4;
+
+  tmp = buf.readUInt8(offset);
+  offset += 1;
+
+  var flags = {
+    fin: !!(tmp & 0x01),
+    syn: !!(tmp & 0x02),
+    rst: !!(tmp & 0x04),
+    psh: !!(tmp & 0x08),
+    ack: !!(tmp & 0x10),
+    urg: !!(tmp & 0x20)
+  };
+
+  var window = buf.readUInt16BE(offset);
+  offset += 2;
+
+  var data = buf.slice(headerLength);
+
+  return { srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
+           flags: flags, window: window, data: data };
+}
