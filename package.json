@@ -1,6 +1,6 @@
 {
   "name": "pcap-socket",
-  "description": "Socket compatibility layer on top of the pcap-parser module",
+  "description": "Mock TCP socket based on pcap file data.",
   "keywords": [
     "pcap",
     "socket",
