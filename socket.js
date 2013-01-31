@@ -27,6 +27,7 @@ module.exports = PcapSocket;
 
 var stream = require('stream');
 var Duplex = stream.Duplex;
+var PassThrough = stream.PassThrough;
 var util = require('util');
 
 var pcap = require('pcap-parser');
@@ -42,27 +43,29 @@ function PcapSocket(pcapSource, address, opts) {
 
   Duplex.call(self, opts);
 
-  self.reading = true;
-  self.address = address;
+  self.response = new PassThrough(opts);
+  self.on('finish', self.response.end.bind(self));
 
-  self.parser = pcap.parse(pcapSource);
-  self.parser.on('packet', self._onData.bind(self));
+  self._reading = true;
+  self._address = address;
+
+  self._parser = pcap.parse(pcapSource);
+  self._parser.on('packet', self._onData.bind(self));
+  self._parser.on('end', self.push.bind(self, null));
+  self._parser.on('error', self.emit.bind(self, 'error'));
 
   return self;
 }
 
 PcapSocket.prototype._read = function(size, callback) {
-  if (!this.reading) {
-    this.reading = true;
-    this.parser.stream.resume();
+  if (!this._reading) {
+    this._reading = true;
+    this._parser.stream.resume();
   }
 };
 
 PcapSocket.prototype._write = function(chunk, callback) {
-  this.emit('response', chunk);
-  if (typeof callback === 'function') {
-    callback();
-  }
+  this.response.write(chunk, callback);
 };
 
 PcapSocket.prototype._onData = function(packet) {
@@ -73,8 +76,8 @@ PcapSocket.prototype._onData = function(packet) {
   // TODO: auto-pause stream if reverse traffic is seen
 
   var room = this.push(payload);
-  if (!room && this.reading) {
-    this.reading = false;
-    this.parser.stream.pause();
+  if (!room && this._reading) {
+    this._reading = false;
+    this._parser.stream.pause();
   }
 };

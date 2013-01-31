@@ -34,9 +34,12 @@ module.exports.testData = function(test) {
 
   var psocket = new PcapSocket(file, '192.168.1.2.139');
 
-  _flow(psocket, 200, function(chunk) {
+  _flow(psocket, 379, function(chunk) {
     test.ok(chunk);
-    test.equal(200, chunk.length);
+    test.equal(379, chunk.length);
+  });
+
+  psocket.on('end', function() {
     test.done();
   });
 };
@@ -50,13 +53,17 @@ module.exports.testResponse = function(test) {
 
   var msg = 'hello world';
 
-  psocket.on('response', function(chunk) {
+  psocket.response.on('readable', function() {
+    var chunk = psocket.response.read(msg.length);
     test.equal(msg, chunk.toString());
-    test.done();
   });
 
-  _flow(psocket, 200, function(chunk) {
+  _flow(psocket, 379, function(chunk) {
     psocket.write(new Buffer(msg));
+  });
+
+  psocket.on('end', function() {
+    test.done();
   });
 };
 
