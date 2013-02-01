@@ -42,3 +42,39 @@ psock.response.read(0);
 * Develop better example showing bi-directional interactions.
 
 [pcap-parser]: http://www.github.com/nearinfinity/node-pcap-parser
+
+## Class PcapSocket
+
+The PcapSocket class inherits from `Duplex`.  Therefore it provides
+both streaming `Readable` and `Writable` interfaces.
+
+### new PcapSocket(pcapSource, address, opts)
+
+* `pcapSource` {String | Stream} If a String, pcapSource is interpreted as
+  the name of a pcap file to read from.  Otherwise `pcapSource` is treated
+  as a stream providing pcap data.
+* `address` {String} An IP address used in the pcap file.  The socket will
+  act as that IP address.  Packets sent to this address will be available
+  on the socket's `read()` method.
+* `opts` {Object | null} Optional parameters
+  * `autoHalt` {Boolean} If set to true the socket will automatically `halt()`
+    when it sees TCP data sent from the configured local address.  This is
+    intended to allow test code the opportunity to read from the `response`
+    stream.  Once the response has been verified correct, call `proceed()`
+    to restart the flow of data.  Defaults to false.
+
+### psocket.halt()
+
+Stop the flow of data.  While halted, no new data will be buffered to be
+returned by the `read()` function.  To start the flow of data again, use
+`proceed()`.
+
+The term halt is used since `pause()` is associated with the old style
+`stream` API.
+
+### psocket.resume()
+
+Start the flow of data again after `halt()` has been used to stop it.
+
+The term proceed is used since `resume()` is associated with the old style
+`stream` API.

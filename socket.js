@@ -50,8 +50,10 @@ function PcapSocket(pcapSource, address, opts) {
   self.on('finish', self.response.end.bind(self));
 
   self._reading = true;
+  self._halted = false;
+
   self._address = address;
-  self._autoPause = !!opts.autoPause;
+  self._autoHalt = !!opts.autoHalt;
 
   self._parser = pcap.parse(pcapSource);
   self._parser.on('packet', self._onData.bind(self));
@@ -61,15 +63,38 @@ function PcapSocket(pcapSource, address, opts) {
   return self;
 }
 
+PcapSocket.prototype.halt = function() {
+  this._halted = true;
+  this._pause();
+};
+
+PcapSocket.prototype.proceed = function() {
+  this._halted = false;
+  this._resume();
+};
+
+PcapSocket.prototype.setTimeout = function() { };
+
 PcapSocket.prototype._read = function(size, callback) {
-  if (!this._reading) {
-    this._reading = true;
-    this._parser.stream.resume();
-  }
+  this._resume();
 };
 
 PcapSocket.prototype._write = function(chunk, callback) {
   this.response.write(chunk, callback);
+};
+
+PcapSocket.prototype._pause = function() {
+  if (this._reading) {
+    this.reading = false;
+    this._parser.stream.pause();
+  }
+};
+
+PcapSocket.prototype._resume = function() {
+  if (!this._reading && !this._halted) {
+    this.reading = true;
+    this._parser.stream.resume();
+  }
 };
 
 PcapSocket.prototype._onData = function(packet) {
@@ -92,10 +117,8 @@ PcapSocket.prototype._onData = function(packet) {
   }
 
   // auto-stop if we see packets coming from 
-  if (iph.src === this._address && this._autoPause) {
-    this._reading = false;
-    this._parser.stream.pause();
-    return;
+  if (this._autoHalt && iph.src === this._address) {
+    this.halt();
   }
 
   if (iph.dst !== this._address) {
@@ -103,9 +126,8 @@ PcapSocket.prototype._onData = function(packet) {
   }
 
   var room = this.push(tcp.data);
-  if (!room && this._reading) {
-    this._reading = false;
-    this._parser.stream.pause();
+  if (!room) {
+    this._pause();
   }
 };
 
