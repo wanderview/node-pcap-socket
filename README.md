@@ -57,9 +57,6 @@ module.exports.http = function(test) {
 
 ## TODO
 
-* Implement various other net.Socket() features like `localAddress`,
-  `localPort`, etc.  Pretty much this only provides the stream API at the
-  moment.
 * Do something more intelligent with duplicate and out-of-order TCP packets.
 
 [pcap-parser]: http://www.github.com/nearinfinity/node-pcap-parser
@@ -74,7 +71,7 @@ both streaming `Readable` and `Writable` interfaces.
 * `pcapSource` {String | Stream} If a String, pcapSource is interpreted as
   the name of a pcap file to read from.  Otherwise `pcapSource` is treated
   as a stream providing pcap data.
-* `address` {String} An IP address used in the pcap file.  The socket will
+* `address` {String} An IPv4 address used in the pcap file.  The socket will
   act as that IP address.  Packets sent to this address will be available
   on the socket's `read()` method.
 * `opts` {Object | null} Optional parameters
@@ -83,6 +80,19 @@ both streaming `Readable` and `Writable` interfaces.
     intended to allow test code the opportunity to read from the `response`
     stream.  Once the response has been verified correct, call `proceed()`
     to restart the flow of data.  Defaults to false.
+  * `localPort` {Number | null} The TCP port associated with the `address`
+    passed as the second argument.  Packets sent to this port at the given
+    address wil be available on the socket's `read()` method.  If not
+    provided then the port will be automatically set to the port used on
+    the first TCP packet with data.
+  * `remoteAddress` {String | null}  The IPv4 address of the remote peer in
+    the pcap file's TCP session.  Only packets originating from this address
+    will be available via `read()`.  If not set, then the address will be
+    automatically configured based on the first TCP packet with data.
+  * `remotePort` {Number | null}  The TCP port number of the remote pper in
+    the pcap file's TCP session.  Only packets originating from this port
+    will be available via `read()`.  If not set, then port will be
+    automatically configured based on the first TCP packet with data.
 
 ### psocket.halt()
 
@@ -99,3 +109,19 @@ Start the flow of data again after `halt()` has been used to stop it.
 
 The term proceed is used since `resume()` is associated with the old style
 `stream` API.
+
+### address()
+### localAddress
+### localPort
+### remoteAddress
+### remotePort
+
+These properties are provided in order to maintain compatibility with the
+[net.Socket][] API.  If the `localPort`, `remoteAddress`, or `remotePort`
+are not set via the constructor options, then they will default to either
+the address `'0.0.0.0'` or port `0`.  Once a packet is processed they will
+then represent the selected TCP session addresses and ports.  If this
+change is problematic for your code or tests, then make sure to set the
+addresses and ports via the constructor options.
+
+[net.Socket]: http://nodejs.org/api/net.html#net_class_net_socket

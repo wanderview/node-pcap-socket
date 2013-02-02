@@ -27,7 +27,7 @@ var PcapSocket = require('../socket');
 
 var path = require('path');
 
-module.exports.testData = function(test) {
+module.exports.data = function(test) {
   test.expect(2);
 
   var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
@@ -44,7 +44,7 @@ module.exports.testData = function(test) {
   });
 };
 
-module.exports.testResponse = function(test) {
+module.exports.response = function(test) {
   test.expect(1);
 
   var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
@@ -62,6 +62,174 @@ module.exports.testResponse = function(test) {
   });
 
   psocket.on('end', function() {
+    test.done();
+  });
+};
+
+module.exports.defaultProperties = function(test) {
+  test.expect(12);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.2';
+  var psocket = new PcapSocket(file, addr);
+
+  test.equal(addr, psocket.localAddress);
+  test.equal('0.0.0.0', psocket.remoteAddress);
+  test.equal(0, psocket.localPort);
+  test.equal(0, psocket.remotePort);
+
+  var obj = psocket.address();
+  test.equal(addr, obj.address);
+  test.equal(0, obj.port);
+
+  psocket.on('readable', function() {
+    test.equal(addr, psocket.localAddress);
+    test.equal('192.168.1.7', psocket.remoteAddress);
+    test.equal(139, psocket.localPort);
+    test.equal(1165, psocket.remotePort);
+
+    var obj = psocket.address();
+    test.equal(addr, obj.address);
+    test.equal(139, obj.port);
+
+    test.done();
+  });
+  psocket.read(0);
+};
+
+module.exports.setProperties = function(test) {
+  test.expect(12);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.2';
+  var psocket = new PcapSocket(file, addr, {
+    remoteAddress: '192.168.1.7',
+    remotePort: 1165,
+    localPort: 139
+  });
+
+  test.equal(addr, psocket.localAddress);
+  test.equal('192.168.1.7', psocket.remoteAddress);
+  test.equal(139, psocket.localPort);
+  test.equal(1165, psocket.remotePort);
+
+  var obj = psocket.address();
+  test.equal(addr, obj.address);
+  test.equal(139, obj.port);
+
+  psocket.on('readable', function() {
+    test.equal(addr, psocket.localAddress);
+    test.equal('192.168.1.7', psocket.remoteAddress);
+    test.equal(139, psocket.localPort);
+    test.equal(1165, psocket.remotePort);
+
+    var obj = psocket.address();
+    test.equal(addr, obj.address);
+    test.equal(139, obj.port);
+
+    test.done();
+  });
+  psocket.read(0);
+};
+
+module.exports.remoteAddrFilter = function(test) {
+  test.expect(1);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.2';
+  var psocket = new PcapSocket(file, addr, {
+    remoteAddress: '192.168.1.100',
+  });
+
+  var length = 0;
+  psocket.on('readable', function() {
+    var chunk = psocket.read();
+    if (chunk) {
+      length += chunk.length;
+    }
+  });
+  psocket.read(0);
+
+  psocket.on('end', function() {
+    test.equal(0, length);
+    test.done();
+  });
+};
+
+module.exports.remotePortFilter = function(test) {
+  test.expect(1);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.2';
+  var psocket = new PcapSocket(file, addr, {
+    remotePort: 2222
+  });
+
+  var length = 0;
+  psocket.on('readable', function() {
+    var chunk = psocket.read();
+    if (chunk) {
+      length += chunk.length;
+    }
+  });
+  psocket.read(0);
+
+  psocket.on('end', function() {
+    test.equal(0, length);
+    test.done();
+  });
+};
+
+module.exports.localPortFilter = function(test) {
+  test.expect(1);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.2';
+  var psocket = new PcapSocket(file, addr, {
+    localPort: 137
+  });
+
+  var length = 0;
+  psocket.on('readable', function() {
+    var chunk = psocket.read();
+    if (chunk) {
+      length += chunk.length;
+    }
+  });
+  psocket.read(0);
+
+  psocket.on('end', function() {
+    test.equal(0, length);
+    test.done();
+  });
+};
+
+module.exports.localAddrFilter = function(test) {
+  test.expect(1);
+
+  var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
+
+  var addr = '192.168.1.100';
+  var psocket = new PcapSocket(file, addr, {
+    localPort: 137
+  });
+
+  var length = 0;
+  psocket.on('readable', function() {
+    var chunk = psocket.read();
+    if (chunk) {
+      length += chunk.length;
+    }
+  });
+  psocket.read(0);
+
+  psocket.on('end', function() {
+    test.equal(0, length);
     test.done();
   });
 };

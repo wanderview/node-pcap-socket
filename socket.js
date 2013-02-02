@@ -31,6 +31,7 @@ var PassThrough = stream.PassThrough;
 var util = require('util');
 
 var ip = require('ip');
+var net = require('net');
 var pcap = require('pcap-parser');
 
 util.inherits(PcapSocket, Duplex);
@@ -46,19 +47,33 @@ function PcapSocket(pcapSource, address, opts) {
 
   Duplex.call(self, opts);
 
-  self.response = new PassThrough(opts);
-  self.on('finish', self.response.end.bind(self));
+  if (!_validAddr(address)) {
+    throw(new Error('PcapSocket requires a valid IPv4 address; address [' +
+                    address + '] is invalid.'));
+  }
 
   self._reading = true;
   self._halted = false;
 
-  self._address = address;
   self._autoHalt = !!opts.autoHalt;
 
   self._parser = pcap.parse(pcapSource);
   self._parser.on('packet', self._onData.bind(self));
   self._parser.on('end', self._onEnd.bind(self));
   self._parser.on('error', self.emit.bind(self, 'error'));
+
+  self.response = new PassThrough(opts);
+  self.on('finish', self.response.end.bind(self));
+
+  // Public properties required for compatibility with net.Socket
+  self.bufferSize = self._readableState.bufferSize;
+  self.bytesRead = 0;
+  self.bytesWritten = 0;
+  self.remoteAddress = _validAddr(opts.remoteAddress)
+                     ? opts.remoteAddress : '0.0.0.0';
+  self.remotePort = ~~opts.remotePort;
+  self.localAddress = address;
+  self.localPort = ~~opts.localPort;
 
   return self;
 }
@@ -78,6 +93,7 @@ PcapSocket.prototype._read = function(size, callback) {
 };
 
 PcapSocket.prototype._write = function(chunk, callback) {
+  this.bytesWritten += chunk.length;
   this.response.write(chunk, callback);
 };
 
@@ -99,43 +115,96 @@ PcapSocket.prototype._onData = function(packet) {
   var payload = packet.data;
 
   var ether = this._parseEthernet(payload);
+
+  // Only consider IP packets.  Ignore all others
   if (ether.type !== 0x0800) {
     return;
   }
 
   var iph = this._parseIP(ether.data);
+
   // Only consider TCP packets without IP fragmentation
   if (!iph || iph.protocol !== 0x06 || iph.mf || iph.offset) {
     return;
   }
 
   var tcp = this._parseTCP(iph.data);
+
+  // Ignore TCP packets without data
   if (tcp.data.length < 1) {
     return;
   }
 
-  // auto-stop if we see packets coming from 
-  if (this._autoHalt && iph.src === this._address) {
-    this.halt();
-  }
-
-  if (iph.dst !== this._address) {
+  // If our configured remote peer is not involved in this packet,
+  // then ignore it.  This is important to check even if the
+  // packet is not destined for us so that we don't auto-halt on
+  // a different session.
+  if (!this._isRemote(iph.src, tcp.srcPort) &&
+      !this._isRemote(iph.dst, tcp.dstPort)) {
     return;
   }
 
+  // auto-halt if we see packets coming from our local endpoint
+  if (this._autoHalt && this._isLocal(iph.src, tcp.srcPort)) {
+    this.halt();
+    return;
+  }
+
+  // If this packet is not destined for our endpoint, ignore it
+  if (!this._isLocal(iph.dst, tcp.dstPort)) {
+    return;
+  }
+
+  this._updateState(iph, tcp);
+
+  // Deliver packet in one of two ways:
+
   // Duplicate optimization from core node net.Socket class.  If there is
-  // an ondata function, call it directly instead of using the normal
-  // streams based path.
+  // an ondata function, call it directly.
   if (typeof this.ondata === 'function') {
     this.ondata(tcp.data, 0, tcp.data.length);
     return;
   }
 
+  // Deliver via normal streams2 push() mechanism.
   var room = this.push(tcp.data);
   if (!room) {
     this._pause();
   }
 };
+
+PcapSocket.prototype._updateState = function(iph, tcp) {
+  this.bytesRead += tcp.data.length;
+
+  // Automatically fill in address information as we see packets.
+  // Alternatively, these can be provided up-front in constructor ops.
+
+  if (!_validAddr(this.remoteAddress)) {
+    this.remoteAddress = iph.src;
+  }
+
+  if (!this.remotePort) {
+    this.remotePort = tcp.srcPort;
+  }
+
+  if (!this.localPort) {
+    this.localPort = tcp.dstPort;
+  }
+}
+
+PcapSocket.prototype._isRemote = function(address, port) {
+  return (!_validAddr(this.remoteAddress) || this.remoteAddress === address) &&
+         (!this.remotePort || this.remotePort === port);
+};
+
+PcapSocket.prototype._isLocal = function(address, port) {
+  return this.localAddress === address &&
+         (!this.localPort || this.localPort === port);
+};
+
+function _validAddr(address) {
+  return net.isIPv4(address) && address !== '0.0.0.0';
+}
 
 PcapSocket.prototype._onEnd = function(packet) {
   // Duplicate optimization from core node net.Socket class.  If there is
@@ -259,5 +328,13 @@ PcapSocket.prototype._parseTCP = function(buf) {
            flags: flags, window: window, data: data };
 }
 
-// Stubs for API compatibility with net.Socket
-PcapSocket.prototype.setTimeout = function() { };
+// API compatibility with net.Socket
+PcapSocket.prototype.address = function() {
+  return { port: this.localPort, family: 'IPv4', address: this.localAddress };
+};
+
+PcapSocket.prototype.setTimeout = function() {};
+PcapSocket.prototype.setNoDelay = function() {};
+PcapSocket.prototype.setKeepAlive = function() {};
+PcapSocket.prototype.unref = function() {};
+PcapSocket.prototype.ref = function() {};
