@@ -9,28 +9,50 @@ This module is a pure JavaScript implementation built on top of the
 
 ## Example
 
+Here is an example test case using a recorded HTTP request to verify that
+the typical node.js hello world server responds correctly.
+
 ```javascript
+'use strict';
+
 var PcapSocket = require('pcap-socket');
 
-// Pretend to be 192.168.1.1 and receive packets from pcapFileName destined
-// for that address.
-var psock = new PcapSocket(pcapFileName, '192.168.1.1');
+var http = require('http');
+var path = require('path');
 
-// Based on streams2 API
-psock.on('readable', function() {
-  var chunk = psock.read();
+module.exports.http = function(test) {
+  test.expect(3);
 
-  // Perform your processing on TCP data stream
-});
-psock.read(0);
+  var msg = 'Hello World\n';
 
-// Bytes written to psock will appear on a response stream
-psock.response.on('readable', function() {
-  var chunk = psock.response.read();
+  // Setup an HTTP server to test
+  var server = http.createServer(function(req, res) {
+    res.writeHead(200, {'Content-Type': 'text/plain'});
+    res.end(msg);
+  });
 
-  // Validate response is correct
-});
-psock.response.read(0);
+  // Configure the pcap socket to provide real, recorded network data
+  var file = path.join(__dirname, 'data', 'http-session-winxp.pcap');
+  var psocket = new PcapSocket(file, '10.0.1.6');
+
+  // When the server sends back a response, validate that it makes sense
+  psocket.response.on('readable', function() {
+    var chunk = psocket.response.read();
+    if (chunk) {
+      var str = chunk.toString();
+
+      test.ok(str.match(/HTTP\/1.1 200 OK/));
+      test.ok(str.match(/Content-Type: text\/plain/));
+      test.ok(str.match(new RegExp(msg)));
+
+      test.done();
+    }
+  });
+  psocket.response.read(0);
+
+  // Supply the pcap socket to the HTTP server as a new connection
+  server.emit('connection', psocket);
+};
 ```
 
 ## TODO
@@ -39,7 +61,6 @@ psock.response.read(0);
   `localPort`, etc.  Pretty much this only provides the stream API at the
   moment.
 * Do something more intelligent with duplicate and out-of-order TCP packets.
-* Develop better example showing bi-directional interactions.
 
 [pcap-parser]: http://www.github.com/nearinfinity/node-pcap-parser
 
@@ -72,7 +93,7 @@ returned by the `read()` function.  To start the flow of data again, use
 The term halt is used since `pause()` is associated with the old style
 `stream` API.
 
-### psocket.resume()
+### psocket.proceed()
 
 Start the flow of data again after `halt()` has been used to stop it.
 
