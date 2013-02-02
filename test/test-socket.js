@@ -53,8 +53,7 @@ module.exports.testResponse = function(test) {
 
   var msg = 'hello world';
 
-  psocket.response.on('readable', function() {
-    var chunk = psocket.response.read(msg.length);
+  _flow(psocket.response, msg.length, function(chunk) {
     test.equal(msg, chunk.toString());
   });
 
