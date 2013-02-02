@@ -57,7 +57,10 @@ module.exports.http = function(test) {
 
 ## TODO
 
+* Only supports IPv4 at the moment.
 * Do something more intelligent with duplicate and out-of-order TCP packets.
+  Currently packets are delivered as they are seen by pcap.  No attempt is
+  made to de-duplicate or re-order packets.
 
 [pcap-parser]: http://www.github.com/nearinfinity/node-pcap-parser
 
