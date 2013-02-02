@@ -57,7 +57,7 @@ function PcapSocket(pcapSource, address, opts) {
 
   self._parser = pcap.parse(pcapSource);
   self._parser.on('packet', self._onData.bind(self));
-  self._parser.on('end', self.push.bind(self, null));
+  self._parser.on('end', self._onEnd.bind(self));
   self._parser.on('error', self.emit.bind(self, 'error'));
 
   return self;
@@ -72,8 +72,6 @@ PcapSocket.prototype.proceed = function() {
   this._halted = false;
   this._resume();
 };
-
-PcapSocket.prototype.setTimeout = function() { };
 
 PcapSocket.prototype._read = function(size, callback) {
   this._resume();
@@ -125,10 +123,30 @@ PcapSocket.prototype._onData = function(packet) {
     return;
   }
 
+  // Duplicate optimization from core node net.Socket class.  If there is
+  // an ondata function, call it directly instead of using the normal
+  // streams based path.
+  if (typeof this.ondata === 'function') {
+    this.ondata(tcp.data, 0, tcp.data.length);
+    return;
+  }
+
   var room = this.push(tcp.data);
   if (!room) {
     this._pause();
   }
+};
+
+PcapSocket.prototype._onEnd = function(packet) {
+  // Duplicate optimization from core node net.Socket class.  If there is
+  // an onend function, call it directly instead of using the normal
+  // streams based path.
+  if (typeof this.onend === 'function') {
+    this.onend();
+    return;
+  }
+
+  this.push(null);
 };
 
 PcapSocket.prototype._parseEthernet = function(buf) {
@@ -240,3 +258,6 @@ PcapSocket.prototype._parseTCP = function(buf) {
   return { srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
            flags: flags, window: window, data: data };
 }
+
+// Stubs for API compatibility with net.Socket
+PcapSocket.prototype.setTimeout = function() { };
