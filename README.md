@@ -113,18 +113,17 @@ Start the flow of data again after `halt()` has been used to stop it.
 The term proceed is used since `resume()` is associated with the old style
 `stream` API.
 
-### address()
-### localAddress
-### localPort
-### remoteAddress
-### remotePort
+### address(), localAddress, localPort, remoteAddress, remotePort
 
 These properties are provided in order to maintain compatibility with the
-[net.Socket][] API.  If the `localPort`, `remoteAddress`, or `remotePort`
-are not set via the constructor options, then they will default to either
-the address `'0.0.0.0'` or port `0`.  Once a packet is processed they will
-then represent the selected TCP session addresses and ports.  If this
-change is problematic for your code or tests, then make sure to set the
-addresses and ports via the constructor options.
+[net.Socket][] API.
+
+If the `localPort`, `remoteAddress`, or `remotePort` are not set via the
+constructor options, then they will default to either the address `'0.0.0.0'`
+or port `0`.  Once a packet is processed they will then represent the
+selected TCP session addresses and ports.
+
+If the properties changing is a problem for your code or tests, then make
+sure to set the addresses and ports via the constructor options.
 
 [net.Socket]: http://nodejs.org/api/net.html#net_class_net_socket
