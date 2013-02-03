@@ -62,7 +62,6 @@ function PcapSocket(pcapSource, address, opts) {
   }
 
   self._reading = true;
-  self._halted = false;
 
   self._autoHalt = !!opts.autoHalt;
 
@@ -87,16 +86,6 @@ function PcapSocket(pcapSource, address, opts) {
   return self;
 }
 
-PcapSocket.prototype.halt = function() {
-  this._halted = true;
-  this._pause();
-};
-
-PcapSocket.prototype.proceed = function() {
-  this._halted = false;
-  this._resume();
-};
-
 PcapSocket.prototype._read = function(size, callback) {
   this._resume();
 };
@@ -114,7 +103,7 @@ PcapSocket.prototype._pause = function() {
 };
 
 PcapSocket.prototype._resume = function() {
-  if (!this._reading && !this._halted) {
+  if (!this._reading) {
     this.reading = true;
     this._parser.stream.resume();
   }
@@ -145,17 +134,9 @@ PcapSocket.prototype._onData = function(packet) {
   }
 
   // If our configured remote peer is not involved in this packet,
-  // then ignore it.  This is important to check even if the
-  // packet is not destined for us so that we don't auto-halt on
-  // a different session.
+  // then ignore it.
   if (!this._isRemote(iph.src, tcp.srcPort) &&
       !this._isRemote(iph.dst, tcp.dstPort)) {
-    return;
-  }
-
-  // auto-halt if we see packets coming from our local endpoint
-  if (this._autoHalt && this._isLocal(iph.src, tcp.srcPort)) {
-    this.halt();
     return;
   }
 
