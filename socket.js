@@ -26,8 +26,17 @@
 module.exports = PcapSocket;
 
 var stream = require('stream');
-var Duplex = stream.Duplex;
-var PassThrough = stream.PassThrough;
+// Use core classes for node >= 0.9.6
+if (stream.Duplex && stream.PassThrough) {
+  var Duplex = stream.Duplex;
+  var PassThrough = stream.PassThrough;
+
+// Use readable-stream module for node < 0.9.6
+} else {
+  var Duplex = require('readable-stream/Duplex');
+  var PassThrough = require('readable-stream/PassThrough');
+}
+
 var util = require('util');
 
 var ip = require('ip');

@@ -69,6 +69,10 @@ module.exports.http = function(test) {
 The PcapSocket class inherits from `Duplex`.  Therefore it provides
 both streaming `Readable` and `Writable` interfaces.
 
+Note, while PcapSocket uses the new streams2 API provided in node 0.9.6
+and greater, this class should still work in older versions of node.  This
+backward compatibility is implemented using the [readable-stream][] module.
+
 ### new PcapSocket(pcapSource, address, opts)
 
 * `pcapSource` {String | Stream} If a String, pcapSource is interpreted as
@@ -126,4 +130,5 @@ selected TCP session addresses and ports.
 If the properties changing is a problem for your code or tests, then make
 sure to set the addresses and ports via the constructor options.
 
+[readable-stream]: https://github.com/isaacs/readable-stream
 [net.Socket]: http://nodejs.org/api/net.html#net_class_net_socket
