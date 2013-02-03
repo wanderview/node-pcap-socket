@@ -33,8 +33,8 @@ if (stream.Duplex && stream.PassThrough) {
 
 // Use readable-stream module for node < 0.9.6
 } else {
-  var Duplex = require('readable-stream/Duplex');
-  var PassThrough = require('readable-stream/PassThrough');
+  var Duplex = require('readable-stream/duplex');
+  var PassThrough = require('readable-stream/passthrough');
 }
 
 var util = require('util');
