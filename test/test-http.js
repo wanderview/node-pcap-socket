@@ -44,8 +44,8 @@ module.exports.http = function(test) {
   var psocket = new PcapSocket(file, '10.0.1.6');
 
   // When the server sends back a response, validate that it makes sense
-  psocket.response.on('readable', function() {
-    var chunk = psocket.response.read();
+  psocket.output.on('readable', function() {
+    var chunk = psocket.output.read();
     if (chunk) {
       var str = chunk.toString();
 
@@ -56,7 +56,7 @@ module.exports.http = function(test) {
       test.done();
     }
   });
-  psocket.response.read(0);
+  psocket.output.read(0);
 
   // Supply the pcap socket to the HTTP server as a new connection
   server.emit('connection', psocket);

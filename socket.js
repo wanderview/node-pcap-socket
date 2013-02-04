@@ -70,8 +70,8 @@ function PcapSocket(pcapSource, address, opts) {
   self._parser.on('end', self._onEnd.bind(self));
   self._parser.on('error', self.emit.bind(self, 'error'));
 
-  self.response = new PassThrough(opts);
-  self.on('finish', self.response.end.bind(self));
+  self.output = new PassThrough(opts);
+  self.on('finish', self.output.end.bind(self));
 
   // Public properties required for compatibility with net.Socket
   self.bufferSize = self._readableState.bufferSize;
@@ -92,7 +92,7 @@ PcapSocket.prototype._read = function(size, callback) {
 
 PcapSocket.prototype._write = function(chunk, callback) {
   this.bytesWritten += chunk.length;
-  this.response.write(chunk, callback);
+  this.output.write(chunk, callback);
 };
 
 PcapSocket.prototype._pause = function() {

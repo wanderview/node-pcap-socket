@@ -44,7 +44,7 @@ module.exports.data = function(test) {
   });
 };
 
-module.exports.response = function(test) {
+module.exports.output = function(test) {
   test.expect(1);
 
   var file = path.join(__dirname, 'data', 'netbios-ssn-request-winxp.pcap');
@@ -53,7 +53,7 @@ module.exports.response = function(test) {
 
   var msg = 'hello world';
 
-  _flow(psocket.response, msg.length, function(chunk) {
+  _flow(psocket.output, msg.length, function(chunk) {
     test.equal(msg, chunk.toString());
   });
 
