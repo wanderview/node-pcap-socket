@@ -45,7 +45,8 @@ module.exports.http = function(test) {
 
   // When the server sends back a response, validate that it makes sense
   psocket.output.on('readable', function() {
-    var chunk = psocket.output.read();
+    // Read the full response; length determined by looking at pcap file
+    var chunk = psocket.output.read(156);
     if (chunk) {
       var str = chunk.toString();
 
