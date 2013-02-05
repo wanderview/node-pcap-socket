@@ -63,8 +63,6 @@ function PcapSocket(pcapSource, address, opts) {
 
   self._reading = true;
 
-  self._autoHalt = !!opts.autoHalt;
-
   self._parser = pcap.parse(pcapSource);
   self._parser.on('packet', self._onData.bind(self));
   self._parser.on('end', self._onEnd.bind(self));
