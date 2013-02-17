@@ -39,6 +39,7 @@ if (stream.Duplex && stream.PassThrough) {
 
 var util = require('util');
 
+var EtherFrame = require('ether-frame');
 var ip = require('ip');
 var net = require('net');
 var pcap = require('pcap-parser');
@@ -110,14 +111,14 @@ PcapSocket.prototype._resume = function() {
 PcapSocket.prototype._onData = function(packet) {
   var payload = packet.data;
 
-  var ether = this._parseEthernet(payload);
+  var ether = new EtherFrame(payload);
 
   // Only consider IP packets.  Ignore all others
-  if (ether.type !== 0x0800) {
+  if (ether.type !== 'ip') {
     return;
   }
 
-  var iph = this._parseIP(ether.data);
+  var iph = this._parseIP(payload.slice(ether.bytes));
 
   // Only consider TCP packets without IP fragmentation
   if (!iph || iph.protocol !== 0x06 || iph.mf || iph.offset) {
@@ -204,23 +205,6 @@ PcapSocket.prototype._onEnd = function(packet) {
   }
 
   this.push(null);
-};
-
-PcapSocket.prototype._parseEthernet = function(buf) {
-  var offset = 0;
-
-  var dst = buf.slice(offset, offset + 6);
-  offset += 6;
-
-  var src = buf.slice(offset, offset + 6);
-  offset += 6;
-
-  var type = buf.readUInt16BE(offset);
-  offset += 2;
-
-  var data = buf.slice(offset);
-
-  return { dst: dst, src: src, type: type, data: data };
 };
 
 PcapSocket.prototype._parseIP = function(buf) {
