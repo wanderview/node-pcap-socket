@@ -6,7 +6,7 @@
     "socket",
     "mock"
   ],
-  "version": "0.5.2",
+  "version": "0.5.3",
   "author": "Ben Kelly <ben@wanderview.com>",
   "license": "BSD",
   "dependencies": {
