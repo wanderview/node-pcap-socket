@@ -118,7 +118,7 @@ PcapSocket.prototype._onData = function(packet) {
     return;
   }
 
-  var iph = this._parseIP(payload.slice(ether.bytes));
+  var iph = this._parseIP(payload.slice(ether.length));
 
   // Only consider TCP packets without IP fragmentation
   if (!iph || iph.protocol !== 0x06 || iph.mf || iph.offset) {
