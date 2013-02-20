@@ -40,13 +40,11 @@ if (stream.Duplex && stream.PassThrough) {
 var util = require('util');
 
 var EtherFrame = require('ether-frame');
-var ip = require('ip');
+var IpHeader = require('ip-header');
 var net = require('net');
 var pcap = require('pcap-parser');
 
 util.inherits(PcapSocket, Duplex);
-
-// TODO: consider moving header parsing into separate modules
 
 function PcapSocket(pcapSource, address, opts) {
   var self = (this instanceof PcapSocket)
@@ -111,54 +109,58 @@ PcapSocket.prototype._resume = function() {
 PcapSocket.prototype._onData = function(packet) {
   var payload = packet.data;
 
-  var ether = new EtherFrame(payload);
+  try {
+    var ether = new EtherFrame(payload);
 
-  // Only consider IP packets.  Ignore all others
-  if (ether.type !== 'ip') {
-    return;
-  }
+    // Only consider IP packets.  Ignore all others
+    if (ether.type !== 'ip') {
+      return;
+    }
 
-  var iph = this._parseIP(payload.slice(ether.length));
+    var iph = new IpHeader(payload, ether.length);
 
-  // Only consider TCP packets without IP fragmentation
-  if (!iph || iph.protocol !== 0x06 || iph.mf || iph.offset) {
-    return;
-  }
+    // Only consider TCP packets without IP fragmentation
+    if (iph.protocol !== 'tcp' || iph.flags.mf || iph.offset) {
+      return;
+    }
 
-  var tcp = this._parseTCP(iph.data);
+    var tcp = this._parseTCP(payload, ether.length + iph.length);
 
-  // Ignore TCP packets without data
-  if (tcp.data.length < 1) {
-    return;
-  }
+    // Ignore TCP packets without data
+    if (tcp.data.length < 1) {
+      return;
+    }
 
-  // If our configured remote peer is not involved in this packet,
-  // then ignore it.
-  if (!this._isRemote(iph.src, tcp.srcPort) &&
-      !this._isRemote(iph.dst, tcp.dstPort)) {
-    return;
-  }
+    // If our configured remote peer is not involved in this packet,
+    // then ignore it.
+    if (!this._isRemote(iph.src, tcp.srcPort) &&
+        !this._isRemote(iph.dst, tcp.dstPort)) {
+      return;
+    }
 
-  // If this packet is not destined for our endpoint, ignore it
-  if (!this._isLocal(iph.dst, tcp.dstPort)) {
-    return;
-  }
+    // If this packet is not destined for our endpoint, ignore it
+    if (!this._isLocal(iph.dst, tcp.dstPort)) {
+      return;
+    }
 
-  this._updateState(iph, tcp);
+    this._updateState(iph, tcp);
 
-  // Deliver packet in one of two ways:
+    // Deliver packet in one of two ways:
 
-  // Duplicate optimization from core node net.Socket class.  If there is
-  // an ondata function, call it directly.
-  if (typeof this.ondata === 'function') {
-    this.ondata(tcp.data, 0, tcp.data.length);
-    return;
-  }
+    // Duplicate optimization from core node net.Socket class.  If there is
+    // an ondata function, call it directly.
+    if (typeof this.ondata === 'function') {
+      this.ondata(tcp.data, 0, tcp.data.length);
+      return;
+    }
 
-  // Deliver via normal streams2 push() mechanism.
-  var room = this.push(tcp.data);
-  if (!room) {
-    this._pause();
+    // Deliver via normal streams2 push() mechanism.
+    var room = this.push(tcp.data);
+    if (!room) {
+      this._pause();
+    }
+  } catch (error) {
+    // silently ignore packets we can't parse
   }
 };
 
@@ -207,60 +209,10 @@ PcapSocket.prototype._onEnd = function(packet) {
   this.push(null);
 };
 
-PcapSocket.prototype._parseIP = function(buf) {
-  var offset = 0;
+PcapSocket.prototype._parseTCP = function(buf, offset) {
+  offset = ~~offset;
 
-  var tmp = buf.readUInt8(offset);
-  offset += 1;
-
-  var version = (tmp & 0xf0) >> 4;
-  if (version != 4) {
-    return null;
-  }
-
-  var headerLength = (tmp & 0x0f) * 4;
-
-  // skip DSCP and ECN fields
-  offset += 1;
-
-  var totalLength = buf.readUInt16BE(offset);
-  offset += 2;
-
-  var id = buf.readUInt16BE(offset);
-  offset += 2;
-
-  tmp = buf.readUInt16BE(offset);
-  offset += 2;
-
-  var flags = (tmp & 0xe000) >> 13;
-  var fragmentOffset = tmp & 0x1fff;
-
-  var df = !!(flags & 0x2);
-  var mf = !!(flags & 0x4);
-
-  var ttl = buf.readUInt8(offset);
-  offset += 1;
-
-  var protocol = buf.readUInt8(offset);
-  offset += 1;
-
-  var checksum = buf.readUInt16BE(offset);
-  offset += 2;
-
-  var src = ip.toString(buf.slice(offset, offset + 4));
-  offset += 4;
-
-  var dst = ip.toString(buf.slice(offset, offset + 4));
-  offset += 4;
-
-  var data = buf.slice(headerLength);
-
-  return { flags: {df: df, mf: mf}, id: id, offset: fragmentOffset, ttl: ttl,
-           protocol: protocol, src: src, dst: dst, data: data };
-};
-
-PcapSocket.prototype._parseTCP = function(buf) {
-  var offset = 0;
+  var startOffset = offset;
 
   var srcPort = buf.readUInt16BE(offset);
   offset += 2;
@@ -294,7 +246,7 @@ PcapSocket.prototype._parseTCP = function(buf) {
   var window = buf.readUInt16BE(offset);
   offset += 2;
 
-  var data = buf.slice(headerLength);
+  var data = buf.slice(startOffset + headerLength);
 
   return { srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
            flags: flags, window: window, data: data };
@@ -303,6 +255,10 @@ PcapSocket.prototype._parseTCP = function(buf) {
 // API compatibility with net.Socket
 PcapSocket.prototype.address = function() {
   return { port: this.localPort, family: 'IPv4', address: this.localAddress };
+};
+
+PcapSocket.prototype.destroy = function() {
+  this._onEnd();
 };
 
 PcapSocket.prototype.setTimeout = function() {};
