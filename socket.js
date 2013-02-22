@@ -39,10 +39,10 @@ if (stream.Duplex && stream.PassThrough) {
 
 var util = require('util');
 
-var EtherFrame = require('ether-frame');
+var EtherStream = require('ether-stream');
 var IpHeader = require('ip-header');
 var net = require('net');
-var pcap = require('pcap-parser');
+var PcapStream = require('pcap-stream');
 
 util.inherits(PcapSocket, Duplex);
 
@@ -60,16 +60,6 @@ function PcapSocket(pcapSource, address, opts) {
                     address + '] is invalid.'));
   }
 
-  self._reading = true;
-
-  self._parser = pcap.parse(pcapSource);
-  self._parser.on('packet', self._onData.bind(self));
-  self._parser.on('end', self._onEnd.bind(self));
-  self._parser.on('error', self.emit.bind(self, 'error'));
-
-  self.output = new PassThrough(opts);
-  self.on('finish', self.output.end.bind(self));
-
   // Public properties required for compatibility with net.Socket
   self.bufferSize = self._readableState.bufferSize;
   self.bytesRead = 0;
@@ -80,11 +70,28 @@ function PcapSocket(pcapSource, address, opts) {
   self.localAddress = address;
   self.localPort = ~~opts.localPort;
 
+  // input streaming pipeline
+  self._pstream = new PcapStream(pcapSource);
+  self._estream = new EtherStream();
+  self._estream.on('end', self._onEnd.bind(self));
+  self._estream.on('error', self.emit.bind(self, 'error'));
+  self._pstream.pipe(self._estream);
+
+  // output stream
+  self.output = new PassThrough(opts);
+  self.on('finish', self.output.end.bind(self));
+
+  // start the input pipeline flowing
+  process.nextTick(this._flow.bind(this));
+
   return self;
 }
 
 PcapSocket.prototype._read = function(size, callback) {
-  this._resume();
+  if (this._paused) {
+    this._paused = false;
+    process.nextTick(this._flow.bind(this));
+  }
 };
 
 PcapSocket.prototype._write = function(chunk, callback) {
@@ -92,39 +99,37 @@ PcapSocket.prototype._write = function(chunk, callback) {
   this.output.write(chunk, callback);
 };
 
-PcapSocket.prototype._pause = function() {
-  if (this._reading) {
-    this.reading = false;
-    this._parser.stream.pause();
+PcapSocket.prototype._flow = function() {
+  var msg = this._estream.read();
+  if (!msg) {
+    this._estream.once('readable', this._flow.bind(this));
+    return;
   }
-};
 
-PcapSocket.prototype._resume = function() {
-  if (!this._reading) {
-    this.reading = true;
-    this._parser.stream.resume();
+  this._onData(msg);
+
+  if (this._paused) {
+    return;
   }
-};
 
-PcapSocket.prototype._onData = function(packet) {
-  var payload = packet.data;
+  return this._flow();
+}
+
+PcapSocket.prototype._onData = function(msg) {
+  // Only consider IP packets.  Ignore all others
+  if (msg.ether.type !== 'ip') {
+    return;
+  }
 
   try {
-    var ether = new EtherFrame(payload);
-
-    // Only consider IP packets.  Ignore all others
-    if (ether.type !== 'ip') {
-      return;
-    }
-
-    var iph = new IpHeader(payload, ether.length);
+    var iph = new IpHeader(msg.data);
 
     // Only consider TCP packets without IP fragmentation
     if (iph.protocol !== 'tcp' || iph.flags.mf || iph.offset) {
       return;
     }
 
-    var tcp = this._parseTCP(payload, ether.length + iph.length);
+    var tcp = this._parseTCP(msg.data, iph.length);
 
     // Ignore TCP packets without data
     if (tcp.data.length < 1) {
@@ -157,7 +162,7 @@ PcapSocket.prototype._onData = function(packet) {
     // Deliver via normal streams2 push() mechanism.
     var room = this.push(tcp.data);
     if (!room) {
-      this._pause();
+      this._paused = true;
     }
   } catch (error) {
     // silently ignore packets we can't parse
