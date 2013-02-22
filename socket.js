@@ -90,7 +90,7 @@ function PcapSocket(pcapSource, address, opts) {
 PcapSocket.prototype._read = function(size, callback) {
   if (this._paused) {
     this._paused = false;
-    process.nextTick(this._flow.bind(this));
+    this._flow.bind(this);
   }
 };
 
@@ -100,6 +100,10 @@ PcapSocket.prototype._write = function(chunk, callback) {
 };
 
 PcapSocket.prototype._flow = function() {
+  if (this._paused) {
+    return;
+  }
+
   var msg = this._estream.read();
   if (!msg) {
     this._estream.once('readable', this._flow.bind(this));
@@ -107,10 +111,6 @@ PcapSocket.prototype._flow = function() {
   }
 
   this._onData(msg);
-
-  if (this._paused) {
-    return;
-  }
 
   return this._flow();
 }
