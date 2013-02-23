@@ -40,7 +40,7 @@ if (stream.Duplex && stream.PassThrough) {
 var util = require('util');
 
 var EtherStream = require('ether-stream');
-var IpHeader = require('ip-header');
+var IpStream = require('ip-stream');
 var net = require('net');
 var PcapStream = require('pcap-stream');
 
@@ -73,9 +73,10 @@ function PcapSocket(pcapSource, address, opts) {
   // input streaming pipeline
   self._pstream = new PcapStream(pcapSource);
   self._estream = new EtherStream();
-  self._estream.on('end', self._onEnd.bind(self));
-  self._estream.on('error', self.emit.bind(self, 'error'));
-  self._pstream.pipe(self._estream);
+  self._ipstream = new IpStream();
+  self._ipstream.on('end', self._onEnd.bind(self));
+  self._ipstream.on('error', self.emit.bind(self, 'error'));
+  self._pstream.pipe(self._estream).pipe(self._ipstream);
 
   // output stream
   self.output = new PassThrough(opts);
@@ -104,9 +105,9 @@ PcapSocket.prototype._flow = function() {
     return;
   }
 
-  var msg = this._estream.read();
+  var msg = this._ipstream.read();
   if (!msg) {
-    this._estream.once('readable', this._flow.bind(this));
+    this._ipstream.once('readable', this._flow.bind(this));
     return;
   }
 
@@ -116,20 +117,13 @@ PcapSocket.prototype._flow = function() {
 }
 
 PcapSocket.prototype._onData = function(msg) {
-  // Only consider IP packets.  Ignore all others
-  if (msg.ether.type !== 'ip') {
+  // Only consider TCP packets without IP fragmentation
+  if (msg.ip.protocol !== 'tcp' || msg.ip.flags.mf || msg.ip.offset) {
     return;
   }
 
   try {
-    var iph = new IpHeader(msg.data, msg.offset);
-
-    // Only consider TCP packets without IP fragmentation
-    if (iph.protocol !== 'tcp' || iph.flags.mf || iph.offset) {
-      return;
-    }
-
-    var tcp = this._parseTCP(msg.data, msg.offset + iph.length);
+    var tcp = this._parseTCP(msg.data, msg.offset);
 
     // Ignore TCP packets without data
     if (tcp.data.length < 1) {
@@ -138,17 +132,17 @@ PcapSocket.prototype._onData = function(msg) {
 
     // If our configured remote peer is not involved in this packet,
     // then ignore it.
-    if (!this._isRemote(iph.src, tcp.srcPort) &&
-        !this._isRemote(iph.dst, tcp.dstPort)) {
+    if (!this._isRemote(msg.ip.src, tcp.srcPort) &&
+        !this._isRemote(msg.ip.dst, tcp.dstPort)) {
       return;
     }
 
     // If this packet is not destined for our endpoint, ignore it
-    if (!this._isLocal(iph.dst, tcp.dstPort)) {
+    if (!this._isLocal(msg.ip.dst, tcp.dstPort)) {
       return;
     }
 
-    this._updateState(iph, tcp);
+    this._updateState(msg.ip, tcp);
 
     // Deliver packet in one of two ways:
 
