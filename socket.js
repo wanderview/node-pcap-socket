@@ -122,14 +122,14 @@ PcapSocket.prototype._onData = function(msg) {
   }
 
   try {
-    var iph = new IpHeader(msg.data);
+    var iph = new IpHeader(msg.data, msg.offset);
 
     // Only consider TCP packets without IP fragmentation
     if (iph.protocol !== 'tcp' || iph.flags.mf || iph.offset) {
       return;
     }
 
-    var tcp = this._parseTCP(msg.data, iph.length);
+    var tcp = this._parseTCP(msg.data, msg.offset + iph.length);
 
     // Ignore TCP packets without data
     if (tcp.data.length < 1) {
