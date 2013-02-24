@@ -117,8 +117,7 @@ PcapSocket.prototype._flow = function() {
 }
 
 PcapSocket.prototype._onData = function(msg) {
-  // Only consider TCP packets without IP fragmentation
-  if (msg.ip.protocol !== 'tcp' || msg.ip.flags.mf || msg.ip.offset) {
+  if (msg.ip.protocol !== 'tcp') {
     return;
   }
 
