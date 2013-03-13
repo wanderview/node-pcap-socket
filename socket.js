@@ -96,10 +96,6 @@ PcapSocket.prototype._read = function(size, callback) {
 };
 
 PcapSocket.prototype._write = function(chunk, encoding, callback) {
-  // TODO: remove this once readable-stream gets new _write() API
-  if (typeof encoding === 'function') {
-    callback = encoding;
-  }
   this.bytesWritten += chunk.length;
   this.output.write(chunk, callback);
 };

@@ -13,7 +13,7 @@
     "ether-stream": "~0.3.0",
     "ip-stream": "~0.3.0",
     "pcap-stream": "~0.1.0",
-    "readable-stream": "~0.3.0"
+    "readable-stream": "~1.0.0"
   },
   "devDependencies": {
     "nodeunit": "~0.7.4"
