@@ -21,6 +21,8 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+// jshint node:true
+
 'use strict';
 
 module.exports = PcapSocket;
@@ -47,9 +49,8 @@ var PcapStream = require('pcap-stream');
 util.inherits(PcapSocket, Duplex);
 
 function PcapSocket(pcapSource, address, opts) {
-  var self = (this instanceof PcapSocket)
-           ? this
-           : Object.create(PcapSocket.prototype);
+  var self =
+    (this instanceof PcapSocket) ? this : Object.create(PcapSocket.prototype);
 
   opts = opts || {};
 
@@ -64,8 +65,8 @@ function PcapSocket(pcapSource, address, opts) {
   self.bufferSize = self._readableState.bufferSize;
   self.bytesRead = 0;
   self.bytesWritten = 0;
-  self.remoteAddress = _validAddr(opts.remoteAddress)
-                     ? opts.remoteAddress : '0.0.0.0';
+  self.remoteAddress =
+    _validAddr(opts.remoteAddress) ? opts.remoteAddress : '0.0.0.0';
   self.remotePort = ~~opts.remotePort;
   self.localAddress = address;
   self.localPort = ~~opts.localPort;
@@ -114,7 +115,7 @@ PcapSocket.prototype._flow = function() {
   this._onData(msg);
 
   return this._flow();
-}
+};
 
 PcapSocket.prototype._onData = function(msg) {
   if (msg.ip.protocol !== 'tcp') {
@@ -179,7 +180,7 @@ PcapSocket.prototype._updateState = function(iph, tcp) {
   if (!this.localPort) {
     this.localPort = tcp.dstPort;
   }
-}
+};
 
 PcapSocket.prototype._isRemote = function(address, port) {
   return (!_validAddr(this.remoteAddress) || this.remoteAddress === address) &&
@@ -248,7 +249,7 @@ PcapSocket.prototype._parseTCP = function(buf, offset) {
 
   return { srcPort: srcPort, dstPort: dstPort, seq: seq, ack: ack,
            flags: flags, window: window, data: data };
-}
+};
 
 // API compatibility with net.Socket
 PcapSocket.prototype.address = function() {
